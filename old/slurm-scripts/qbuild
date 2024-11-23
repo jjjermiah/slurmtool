@@ -1,2 +1,0 @@
-#!/bin/bash
-salloc -p build -c 1 --mem=10G -t 0:59:00
