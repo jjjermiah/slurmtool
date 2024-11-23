@@ -1,0 +1,42 @@
+#!/bin/bash
+
+echo "Welcome to the interactive slurm job submission script"
+
+# Set default values
+cores=1
+mem="10G"
+partition="all"
+time="02:59:00"
+
+# Prompting user for options
+read -p "Enter the number of cores you need (default is $cores): " user_cores
+cores=${user_cores:-$cores}
+
+read -p "Enter the memory required for the job (default is $mem): " user_mem
+mem=${user_mem:-$mem}
+
+read -p "Enter the partition to run the job in (default is $partition): " user_partition
+partition=${user_partition:-$partition}
+
+read -p "Enter the maximum time needed for the job (format: days-hours:minutes:seconds, default is $time): " user_time
+time=${user_time:-$time}
+
+# Constructing the salloc command
+salloc_cmd="salloc -c $cores --mem=$mem --partition=$partition --time=$time"
+
+
+# Confirming with the user before executing the command
+echo "Press Enter to run this command now, or press ESC to cancel."
+
+# Read a single key input
+read -rsn1 confirm
+
+# ASCII code for ESC is 27
+if [[ "$confirm" == "" ]]; then
+    echo "Executing $salloc_cmd"
+    $salloc_cmd
+elif [[ "$confirm" == $'\e' ]]; then
+    echo "Command execution aborted."
+else
+    echo "Invalid input. Command execution aborted."
+fi

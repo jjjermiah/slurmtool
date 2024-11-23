@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+# cqueue
+
+set -euo pipefail
+
+help() {
+    # Display help information
+    cat << EOF
+cqueue - Display job queue information
+
+Usage: cqueue [-h] [-p <partition>] [-u <username>]
+
+Options:
+  -h  Display help
+  -p  Filter partitions
+      * Default value shows all partitions
+      * Multiple partitions can be specified with comma separation
+  -u  Filter users
+      * Default value shows all users
+      * Multiple users can be specified with comma separation
+
+Examples:
+  cqueue
+  cqueue -h
+  cqueue -p epyc-64
+  cqueue -u user1
+  cqueue -p main -u user1
+  cqueue -p main,gpu -u user1,user2
+EOF
+}
+
+# Set default values for option arguments
+users=""
+partitions=""
+
+# Set squeue format
+format="%12i %.10u %.12j %.10P %.8T %.11M %.20R"
+
+# Define options
+while getopts ":hp:u:" option; do
+   case $option in
+      h) # display help
+         help
+         exit 0
+         ;;
+      p) # select partitions
+         partitions=$OPTARG
+         if [[ $partitions =~ ^- ]]; then
+           echo "Error: Invalid argument to option -p" >&2
+           exit 1
+         fi
+         ;;
+      u) # select users
+         users=$OPTARG
+         if [[ $users =~ ^- ]]; then
+           echo "Error: Invalid argument to option -u" >&2
+           exit 1
+         fi
+         ;;
+      \?) # invalid argument
+         echo "Error: Invalid option -$OPTARG" >&2
+         exit 1
+         ;;
+   esac
+done
+
+echo "-----------------------------------------------------------------------------------------"
+echo "      Job ID       User     Job Name  Partition    State     Elapsed     Nodelist(Reason)"
+echo "------------ ---------- ------------ ---------- -------- ----------- --------------------"
+
+if [[ -z $partitions ]]; then
+    if [[ -z $users ]]; then
+        # List all users and all partitions
+        squeue -h -o "$format"
+    else
+        # List specified users and all partitions
+        squeue -h -o "$format" -u "$users"
+    fi
+else
+    if [[ -z $users ]]; then
+        # List all users and specified partitions
+        squeue -h -o "$format" -p "$partitions"
+    else
+        # List specified users and specified partitions
+        squeue -h -o "$format" -u "$users" -p "$partitions"
+    fi
+fi
