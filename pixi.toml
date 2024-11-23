@@ -6,6 +6,12 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+run = "cargo run -- "
+
+build_release = "cargo build --release"
+
+slurmtool.cmd = "target/release/slurmtool"
+slurmtool.depends_on = ["build_release"]
 
 [dependencies]
 rust = ">=1.82.0,<1.83"

@@ -1,77 +1,43 @@
-mod node;
-mod partition;
+// use crossterm::{
+//     event::{self, Event, KeyCode},
+//     execute,
+//     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+// };
+// use ratatui::{
+//     backend::CrosstermBackend,
+//     layout::{Constraint, Direction, Layout},
+//     style::{Color, Modifier, Style},
+//     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+//     Terminal,
+// };
+use std::{error::Error};
+pub mod partition;
+pub mod node;
+use partition::{PartitionMap};
+use node::{NodeMap};
+fn main() -> Result<(), Box<dyn Error>> {
+    // Fetch node data
+    let node_map: NodeMap = NodeMap::build()?;
 
-use clap::Parser;
-use std::error::Error;
-use std::process;
-use node::Node;
-use partition::Partition;
+    // Fetch partition data
+    let partition_map: PartitionMap = PartitionMap::build()?;
 
-#[derive(Parser)]
-#[command(
-    author = "Your Name",
-    version = "1.0",
-    about = "A simple CLI for parsing Slurm node and partition information"
-)]
-struct Cli {
-    #[arg(long)]
-    fetch_nodes: bool,
+    //  get the partition 'veryhimem' from the partition map
+    let p_of_choice = "veryhimem";
+    let partition = partition_map.get(p_of_choice).unwrap();
 
-    #[arg(long)]
-    fetch_partitions: bool,
+    println!("Partition: {}\n", partition.name);
+    for node in partition.nodes.iter() {
+        let node = node_map.get(node).unwrap();
+        println!(
+            "Node: {:<16}\n\tCPUTotal: {:<4}\n\tMEMORY: {}\n\n",
+            node.name, 
+            node.pretty_cpu(),
+            node.pretty_memory("GB"),
+        );
 
-    #[arg(short, long)]
-    input: Option<String>,
-}
-
-fn main() {
-    let cli = Cli::parse();
-
-    if cli.fetch_nodes {
-        match fetch_and_parse_nodes() {
-            Ok(nodes) => {
-                for node in nodes {
-                    println!("{:#?}", node);
-                }
-            }
-            Err(e) => {
-                eprintln!("Error fetching nodes: {}", e);
-                process::exit(1);
-            }
-        }
-    } else if cli.fetch_partitions {
-        match Partition::fetch_and_parse_partitions() {
-            Ok(partitions) => {
-                for partition in partitions {
-                    println!("{:#?}", partition);
-                }
-            }
-            Err(e) => {
-                eprintln!("Error fetching partitions: {}", e);
-                process::exit(1);
-            }
-        }
-    } else if let Some(input_file) = cli.input {
-        println!("Input file: {}", input_file);
-    } else {
-        eprintln!("No action specified. Use --fetch-nodes or --fetch-partitions.");
-        process::exit(1);
-    }
-}
-
-fn fetch_and_parse_nodes() -> Result<Vec<Node>, Box<dyn Error>> {
-    let output = std::process::Command::new("scontrol")
-        .args(["show", "node", "-a", "--oneliner"])
-        .output()?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Failed to execute scontrol: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
     }
 
-    let stdout = String::from_utf8(output.stdout)?;
-    Node::parse_nodes(&stdout)
+    return Ok(());
+
 }
