@@ -1,6 +1,29 @@
 use std::error::Error;
 use std::collections::BTreeMap;
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Memory {
+	pub megabytes: u32,
+}
+
+impl Memory {
+	pub fn new(megabytes: u32) -> Self {
+		Self { megabytes }
+	}
+
+	pub fn as_kb(&self) -> u32 {
+		self.megabytes * 1024
+	}
+
+	pub fn as_mb(&self) -> u32 {
+		self.megabytes as u32
+	}
+
+    pub fn as_gb(&self) -> u32 {
+        (self.megabytes as f64 / 1024.0).round() as u32
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct NodeMap {
     pub nodes: BTreeMap<String, Node>,
@@ -45,8 +68,8 @@ pub struct Node {
     pub hostname: Option<String>,
     pub version: Option<String>,
     pub os: Option<String>,
-    pub real_memory: Option<u32>,
-    pub allocated_memory: Option<u32>,
+	pub real_memory: Option<Memory>,
+	pub allocated_memory: Option<Memory>,
     pub sockets: Option<u32>,
     pub boards: Option<u32>,
     pub mem_spec_limit: Option<u32>,
@@ -96,8 +119,8 @@ impl Node {
                 "NodeHostName" => node.hostname = Some(value.to_string()),
                 "Version" => node.version = Some(value.to_string()),
                 "OS" => node.os = Some(value.to_string()),
-                "RealMemory" => node.real_memory = value.parse().ok(),
-                "AllocMem" => node.allocated_memory = value.parse().ok(),
+                "RealMemory" => node.real_memory = value.parse().ok().map(Memory::new),
+                "AllocMem" => node.allocated_memory = value.parse().ok().map(Memory::new),
                 //"FreeMem" => node.free_memory = value.parse().ok(),  // doesnt make sense from scontrol output ...
                 "Sockets" => node.sockets = value.parse().ok(),
                 "Boards" => node.boards = value.parse().ok(),
@@ -169,29 +192,33 @@ impl Node {
         Ok(nodes)
     }
 
-    pub fn pretty_memory(&self, unit: &str) -> String {
-        let real_memory = self.real_memory.unwrap_or(0);
-        let allocated_memory = self.allocated_memory.unwrap_or(0);
-        let free_memory = real_memory - allocated_memory;
+	pub fn free_memory(&self) -> Option<Memory> {
+		match (self.real_memory, self.allocated_memory) {
+			(Some(real), Some(allocated)) => Some(Memory::new(real.as_kb().saturating_sub(allocated.as_kb()))),
+			_ => None,
+		}
+	}
 
-        match unit {
-            "GB" => format!(
-                "Real: {:<5.0} GB, Allocated: {:<5.0} GB, Free: {:<5.0} GB",
-                real_memory as f64 / 1024.0,
-                allocated_memory as f64 / 1024.0,
-                free_memory as f64 / 1024.0
-            ),
-            "MB" => format!(
-                "Real: {:.0} MB, Allocated: {:.0} MB, Free: {:.0} MB",
-                real_memory * 1024,
-                allocated_memory * 1024,
-                free_memory * 1024
-            ),
-            _ => format!(
-                "Real: {} KB, Allocated: {} KB, Free: {} KB",
-                real_memory, allocated_memory, free_memory
-            ),
-        }
+    pub fn pretty_memory(&self, unit: &str) -> String {
+        let real = self.real_memory.map(|m| match unit {
+            "GB" => format!("{:.2} GB", m.as_gb()),
+            "MB" => format!("{:.0} MB", m.as_mb()),
+            _ => format!("{} KB", m.as_kb()),
+        }).unwrap_or_else(|| "N/A".to_string());
+    
+        let allocated = self.allocated_memory.map(|m| match unit {
+            "GB" => format!("{:.2} GB", m.as_gb()),
+            "MB" => format!("{:.0} MB", m.as_mb()),
+            _ => format!("{} KB", m.as_kb()),
+        }).unwrap_or_else(|| "N/A".to_string());
+    
+        let free = self.free_memory().map(|m| match unit {
+            "GB" => format!("{:.2} GB", m.as_gb()),
+            "MB" => format!("{:.0} MB", m.as_mb()),
+            _ => format!("{} KB", m.as_kb()),
+        }).unwrap_or_else(|| "N/A".to_string());
+    
+        format!("Real: {}, Allocated: {}, Free: {}", real, allocated, free)
     }
 
     pub fn pretty_cpu(&self) -> String {
