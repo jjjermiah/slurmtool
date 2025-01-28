@@ -1,5 +1,9 @@
 use std::error::Error;
-use clap::{Parser, Subcommand};
+use clap::{ Parser, Subcommand };
+
+use terminal_size::{ Width, Height, terminal_size };
+
+// use slurmtool::progress::{new_progress_bar};
 pub mod partition;
 pub mod node;
 use partition::PartitionMap;
@@ -21,7 +25,7 @@ enum Commands {
         /// The name of the partition to fetch nodes from
         #[arg(short, long)]
         partition: String,
-        
+
         /// The number of nodes to display in the partition
         /// Default is all (0)
         #[arg(short, long)]
@@ -36,43 +40,41 @@ enum Commands {
         /// The name of the partition to fetch nodes from
         #[arg(short, long)]
         partition: String,
-        
-    }
+    },
 }
 
-
 fn main() -> Result<(), Box<dyn Error>> {
+    let size = terminal_size();
+    if let Some((Width(w), Height(h))) = size {
+        println!("Your terminal is {} cols wide and {} lines tall", w, h);
+    } else {
+        println!("Unable to get terminal size");
+    }
+
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Nodes { partition, limit, debug } => display_partition_nodes(&partition, limit, debug)?,
-        Commands::GroupNodes { partition } => group_partition_nodes(&partition)?,
+        Commands::Nodes { partition, limit, debug } => {
+            display_partition_nodes(&partition, limit, debug)?;
+        }
+        Commands::GroupNodes { partition } => {
+            group_partition_nodes(&partition)?;
+        }
     }
-
     Ok(())
 }
-
-
 /// Displays the nodes in the specified partition
-fn display_partition_nodes(partition_name: &str, limit: Option<usize>, debug: bool) -> Result<(), Box<dyn Error>> {
-    // Fetch node data
+fn display_partition_nodes(
+    partition_name: &str,
+    limit: Option<usize>,
+    debug: bool
+) -> Result<(), Box<dyn Error>> {
     let node_map: NodeMap = NodeMap::build()?;
-
-    // Fetch partition data
     let partition_map: PartitionMap = PartitionMap::build()?;
 
-    if debug {
-        println!("Debugging is enabled");
-    }
-
-    // Get the partition from the partition map
     let partition = partition_map
         .get(partition_name)
         .ok_or_else(|| format!("Partition '{}' not found", partition_name))?;
-
-    if debug {
-        println!("{:#?}", partition);
-    }
 
     let nodes_to_display = limit.unwrap_or(partition.nodes.len());
     println!(
@@ -91,7 +93,7 @@ fn display_partition_nodes(partition_name: &str, limit: Option<usize>, debug: bo
                 "Node: {:<16}\n\tCPUTotal: {:<4}\n\tMEMORY: {}\n\n",
                 node.name,
                 node.pretty_cpu(),
-                node.pretty_memory("GB"),
+                node.pretty_memory("GB")
             );
         }
     }
@@ -99,41 +101,33 @@ fn display_partition_nodes(partition_name: &str, limit: Option<usize>, debug: bo
     Ok(())
 }
 
-
-/// Groups nodes in the specified partition by total_cpu and real_memory
 /// Groups nodes in the specified partition by total_cpu and real_memory
 fn group_partition_nodes(partition_name: &str) -> Result<(), Box<dyn Error>> {
-    // Fetch node and partition data
     let node_map: NodeMap = NodeMap::build()?;
     let partition_map: PartitionMap = PartitionMap::build()?;
 
-    // Get the partition from the partition map
     let partition = partition_map
         .get(partition_name)
         .ok_or_else(|| format!("Partition '{}' not found", partition_name))?;
 
-    // Create groups based on total_cpu and real_memory
-    let mut groups: std::collections::BTreeMap<(u32, u32), Vec<String>> = std::collections::BTreeMap::new();
+    let mut groups: std::collections::BTreeMap<
+        (u32, u32),
+        Vec<String>
+    > = std::collections::BTreeMap::new();
     for node_name in &partition.nodes {
         if let Some(node) = node_map.get(node_name) {
             let total_cpu = node.cpu_total.unwrap_or(0);
-            let real_memory_gb = node
-                .real_memory
-                .expect("Real memory missing")
-                .as_gb();
-                // .round() as u32; // Convert to a whole number in GB
-            groups
-                .entry((total_cpu, real_memory_gb))
-                .or_default()
-                .push(node.name.clone());
+            let real_memory_gb = node.real_memory.expect("Real memory missing").as_gb();
+            groups.entry((total_cpu, real_memory_gb)).or_default().push(node.name.clone());
         }
     }
 
-    // Print grouped nodes
     for ((total_cpu, real_memory_gb), nodes) in groups {
         println!(
             "{} - Total CPU: {}, Real Memory: {} GB",
-            partition_name, total_cpu, real_memory_gb
+            partition_name,
+            total_cpu,
+            real_memory_gb
         );
         for node_name in nodes {
             println!("\t{}", node_name);
